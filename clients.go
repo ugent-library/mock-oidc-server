@@ -1,17 +1,10 @@
 package main
 
-var clients = []*Client{
+import "github.com/ugent-library/mock-oidc-server/oidc"
+
+var clients = []*oidc.Client{
 	{
 		ID:     "test",
 		Secret: "test",
 	},
-}
-
-func GetClient(id string) *Client {
-	for _, client := range clients {
-		if client.ID == id {
-			return client
-		}
-	}
-	return nil
 }

@@ -1,4 +1,4 @@
-package main
+package oidc
 
 import (
 	"crypto/rsa"
@@ -7,13 +7,13 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type rsaProcessor struct {
+type rsaKeys struct {
 	signKey   *rsa.PrivateKey
 	verifyKey *rsa.PublicKey
 }
 
-// newRSAProcessor(publicKeyPath, privateKeyPath)
-func newRSAProcessor(publicKeyPath string, privateKeyPath string) (*rsaProcessor, error) {
+// newRSAKeys(publicKeyPath, privateKeyPath)
+func newRSAKeys(publicKeyPath string, privateKeyPath string) (*rsaKeys, error) {
 	verifyBytes, err := os.ReadFile(publicKeyPath)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func newRSAProcessor(publicKeyPath string, privateKeyPath string) (*rsaProcessor
 		return nil, err
 	}
 
-	return &rsaProcessor{
+	return &rsaKeys{
 		verifyKey: verifyKey,
 		signKey:   signKey,
 	}, nil

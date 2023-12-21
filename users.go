@@ -1,18 +1,11 @@
 package main
 
-func GetUser(username string) *User {
-	for _, user := range users {
-		if user.Username == username {
-			return user
-		}
-	}
-	return nil
-}
+import "github.com/ugent-library/mock-oidc-server/oidc"
 
-var users = []*User{
+var users = []*oidc.User{
 	{
 		Username: "test",
-		Claims: []*Claim{
+		Claims: []*oidc.Claim{
 			{
 				Name:  "name",
 				Value: "test user",

@@ -1,8 +1,8 @@
-package main
+package oidc
 
 import "time"
 
-type providerEndpoints struct {
+type Endpoints struct {
 	Issuer                            string   `json:"issuer"`
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
 	TokenEndpoint                     string   `json:"token_endpoint"`
@@ -18,7 +18,7 @@ type providerEndpoints struct {
 	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
 }
 
-type tokens struct {
+type Tokens struct {
 	AccessToken string `json:"access_token"`
 	IDToken     string `json:"id_token"`
 	TokenType   string `json:"token_type"`
@@ -49,7 +49,7 @@ type Login struct {
 	User        *User
 }
 
-type OIDCError struct {
+type Error struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description"`
 }
