@@ -89,7 +89,7 @@ func initEndpoints(uriBase string) {
 			"email",
 		},
 		ClaimTypesSupported:              []string{"normal"},
-		IDTokenSigningAlgValuesSupported: []string{"HS256", "RS256"},
+		IDTokenSigningAlgValuesSupported: []string{"RS256"},
 	}
 }
 
@@ -125,6 +125,7 @@ func AuthGet(w http.ResponseWriter, r *http.Request) {
 			q.Set("state", state)
 		}
 		q.Set("code", oldCode.(string))
+		q.Set("iss", endpoints.Issuer)
 		redirectTo.RawQuery = q.Encode()
 		http.Redirect(w, r, redirectTo.String(), http.StatusFound)
 		return
@@ -237,6 +238,7 @@ func AuthPost(w http.ResponseWriter, r *http.Request) {
 			}
 			now := time.Now()
 			newLogin := &Login{
+				Aud:         clientID,
 				Sub:         ulid.Make().String(),
 				RedirectURI: redirectURI,
 				User:        user,
@@ -252,6 +254,7 @@ func AuthPost(w http.ResponseWriter, r *http.Request) {
 			if state != "" {
 				q.Set("state", state)
 			}
+			q.Set("iss", endpoints.Issuer)
 			q.Set("code", code)
 			redirectTo.RawQuery = q.Encode()
 			http.Redirect(w, r, redirectTo.String(), http.StatusFound)
@@ -268,6 +271,20 @@ func AuthPost(w http.ResponseWriter, r *http.Request) {
 		ClientID:     clientID,
 		ResponseType: responseType,
 	})
+}
+
+func loginToClaims(login *Login) jwt.MapClaims {
+	claims := jwt.MapClaims{}
+	for _, c := range login.User.Claims {
+		claims[c.Name] = c.Value
+	}
+	claims["iss"] = endpoints.Issuer
+	claims["sub"] = login.Sub
+	claims["aud"] = login.Aud
+	claims["auth_time"] = login.AuthTime.Unix()
+	claims["iat"] = time.Now().Unix()
+	claims["exp"] = time.Now().Add(expiresIn).Unix()
+	return claims
 }
 
 func Token(w http.ResponseWriter, r *http.Request) {
@@ -312,16 +329,7 @@ func Token(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//ALL OK
-	claims := jwt.MapClaims{}
-	for _, c := range login.User.Claims {
-		claims[c.Name] = c.Value
-	}
-	claims["iss"] = endpoints.Issuer
-	claims["sub"] = login.Sub
-	claims["aud"] = clientID
-	claims["auth_time"] = login.AuthTime.Unix()
-	claims["iat"] = time.Now().Unix()
-	claims["exp"] = time.Now().Add(expiresIn).Unix()
+	claims := loginToClaims(login)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	// NOTE: This is important as the library matches this keyID with the public key
@@ -336,12 +344,45 @@ func Token(w http.ResponseWriter, r *http.Request) {
 		TokenType:   "Bearer",
 		IDToken:     idToken,
 		AccessToken: code,
-		ExpiresIn:   expiresIn,
+		ExpiresIn:   int(expiresIn.Seconds()),
 	}
 	data, _ := json.Marshal(t)
 	w.Header().Add("Content-Type", "application/json")
 	w.Header().Add("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
+
+func UserInfo(w http.ResponseWriter, r *http.Request) {
+	accessToken := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+
+	var statusCode int
+	var data []byte = []byte{}
+
+	if accessToken == "" {
+		statusCode = http.StatusUnauthorized
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		data = []byte("unauthorized")
+	} else if l, err := logins.Get(accessToken); err != nil {
+		if errors.Is(err, gcache.KeyNotFoundError) {
+			statusCode = http.StatusUnauthorized
+			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set("WWW-Authenticate", "Bearer error=\"unsufficient_scope\"")
+			data = []byte("unauthorized")
+		} else {
+			statusCode = http.StatusInternalServerError
+			w.Header().Set("Content-Type", "text/plain")
+			data = []byte("internal_server_error")
+		}
+	} else {
+		statusCode = http.StatusOK
+		w.Header().Add("Content-Type", "application/json")
+		login := l.(*Login)
+		data, _ = json.Marshal(login.User.Claims)
+	}
+
+	w.WriteHeader(statusCode)
 	w.Write(data)
 }
 

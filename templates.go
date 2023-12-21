@@ -16,6 +16,7 @@ const templateAuthS = `
 		<input type="hidden" name="state" value="{{.State}}">
 		<input type="hidden" name="client_id" value="{{.ClientID}}">
 		<input type="hidden" name="response_type" value="{{.ResponseType}}">
+		<button type="submit">Submit</button>
 	</form>
 </body>
 </html>
