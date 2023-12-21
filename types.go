@@ -15,14 +15,14 @@ type providerEndpoints struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	ClaimsSupported                   []string `json:"claims_supported"`
 	ClaimTypesSupported               []string `json:"claim_types_supported"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
 }
 
 type tokens struct {
-	AccessToken  string        `json:"access_token"`
-	RefreshToken string        `json:"refresh_token"`
-	IDToken      string        `json:"id_token"`
-	TokenType    string        `json:"token_type"`
-	ExpiresIn    time.Duration `json:"expires_in"`
+	AccessToken string        `json:"access_token"`
+	IDToken     string        `json:"id_token"`
+	TokenType   string        `json:"token_type"`
+	ExpiresIn   time.Duration `json:"expires_in"`
 }
 
 type User struct {
@@ -30,7 +30,25 @@ type User struct {
 	Claims   []*Claim
 }
 
+type Client struct {
+	ID     string
+	Secret string
+}
+
 type Claim struct {
 	Name  string
 	Value string
+}
+
+type Login struct {
+	Sub         string
+	AuthTime    *time.Time //for claim auth_time
+	RedirectURI string
+	State       string
+	User        *User
+}
+
+type OIDCError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
 }

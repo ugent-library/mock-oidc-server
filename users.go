@@ -1,5 +1,14 @@
 package main
 
+func GetUser(username string) *User {
+	for _, user := range users {
+		if user.Username == username {
+			return user
+		}
+	}
+	return nil
+}
+
 var users = []*User{
 	{
 		Username: "test",
