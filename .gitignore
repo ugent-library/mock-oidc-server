@@ -4,3 +4,4 @@
 !/.data/clients.json.example
 !/.data/oidc.rsa.pub.example
 !/.data/oidc.rsa.example
+/.env

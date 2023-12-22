@@ -149,7 +149,7 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 
 	if responseType != "code" {
 		oidcError = &Error{Error: "unsupported_response_type", ErrorDescription: "response_type must be code"}
-	} else if s.GetClient(clientID) == nil {
+	} else if s.getClient(clientID) == nil {
 		oidcError = &Error{Error: "unauthorized_client", ErrorDescription: "unknown client_id"}
 	} else {
 		requestedScopes := strings.Split(scope, " ")
@@ -209,7 +209,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 
 	if responseType != "code" {
 		oidcError = &Error{Error: "unsupported_response_type", ErrorDescription: "response_type must be code"}
-	} else if s.GetClient(clientID) == nil {
+	} else if s.getClient(clientID) == nil {
 		oidcError = &Error{Error: "unauthorized_client", ErrorDescription: "unknown client_id"}
 	} else {
 		requestedScopes := strings.Split(scope, " ")
@@ -239,7 +239,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 	var authError string
 
 	if username != "" {
-		var user *User = s.GetUser(username)
+		var user *User = s.getUser(username)
 		if user == nil {
 			authError = "Unable to find user " + username
 		} else {
@@ -320,7 +320,7 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := s.GetClient(clientID)
+	client := s.getClient(clientID)
 	if client == nil || client.Secret != clientSecret {
 		s.sendOIDCError(w, http.StatusUnauthorized, "invalid_client", "invalid_client")
 		return
@@ -331,7 +331,6 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 		s.sendOIDCError(w, http.StatusBadRequest, "invalid_grant", "invalid_grant")
 		return
 	} else if err != nil {
-		s.logger.Errorf("unable to fetch login from store: %s", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -432,7 +431,7 @@ func (s *Server) Clear(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
-func (s *Server) GetClient(id string) *Client {
+func (s *Server) getClient(id string) *Client {
 	for _, client := range s.clients {
 		if client.ID == id {
 			return client
@@ -441,7 +440,7 @@ func (s *Server) GetClient(id string) *Client {
 	return nil
 }
 
-func (s *Server) GetUser(username string) *User {
+func (s *Server) getUser(username string) *User {
 	for _, user := range s.users {
 		if user.Username == username {
 			return user

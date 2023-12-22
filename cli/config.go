@@ -1,9 +1,8 @@
-package main
+package cli
 
 type Config struct {
 	Production        bool   `env:"PRODUCTION"`
 	SessionCookieName string `env:"SESSION_COOKIE_NAME" envDefault:"MOCK_OIDC_SESSION"`
-	SessionSecret     string `env:"SESSION_SECRET"`
 	URIBase           string `env:"URI_BASE" envDefault:"http://localhost:3000"`
 	ExpiresIn         int    `env:"EXPIRES_IN"`
 	PublicKeyPath     string `env:"PUBLIC_KEY_PATH" envDefault:".data/oidc.rsa.pub"`
