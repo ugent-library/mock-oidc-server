@@ -1,4 +1,4 @@
-package oidc
+package mockoidc
 
 import "time"
 
@@ -26,18 +26,18 @@ type Tokens struct {
 }
 
 type User struct {
-	Username string
-	Claims   []*Claim
+	Username string   `json:"username"`
+	Claims   []*Claim `json:"claims"`
 }
 
 type Client struct {
-	ID     string
-	Secret string
+	ID     string `json:"id"`
+	Secret string `json:"secret"`
 }
 
 type Claim struct {
-	Name  string
-	Value string
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type Login struct {

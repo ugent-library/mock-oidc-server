@@ -1,4 +1,4 @@
-package oidc
+package mockoidc
 
 import "html/template"
 

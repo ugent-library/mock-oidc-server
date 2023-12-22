@@ -1,6 +1,7 @@
-package oidc
+package mockoidc
 
 import (
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -22,8 +23,8 @@ type Config struct {
 	SessionSecret     string
 	URIBase           string
 	ExpiresIn         time.Duration
-	PublicKeyPath     string
-	PrivateKeyPath    string
+	PublicKey         *rsa.PublicKey
+	PrivateKey        *rsa.PrivateKey
 	Logger            *zap.SugaredLogger
 	Users             []*User
 	Clients           []*Client
@@ -34,7 +35,8 @@ type Server struct {
 	logger            *zap.SugaredLogger
 	sessionCookieName string
 	sessionStore      *sessions.CookieStore
-	rsaKeys           *rsaKeys
+	publicKey         *rsa.PublicKey
+	privateKey        *rsa.PrivateKey
 	endpoints         *Endpoints
 	logins            gcache.Cache
 	expiresIn         time.Duration
@@ -54,11 +56,6 @@ func NewServer(config Config) (*Server, error) {
 	sessionStore.Options.Path = uriBase.Path + "/auth"
 	sessionStore.Options.HttpOnly = true
 	sessionStore.Options.Secure = false
-
-	r, err := newRSAKeys(config.PublicKeyPath, config.PrivateKeyPath)
-	if err != nil {
-		return nil, err
-	}
 
 	endpoints := &Endpoints{
 		Issuer:                config.URIBase,
@@ -96,7 +93,8 @@ func NewServer(config Config) (*Server, error) {
 
 	return &Server{
 		endpoints:         endpoints,
-		rsaKeys:           r,
+		publicKey:         config.PublicKey,
+		privateKey:        config.PrivateKey,
 		uriBase:           config.URIBase,
 		keyID:             ulid.Make().String(),
 		logger:            config.Logger,
@@ -109,10 +107,10 @@ func NewServer(config Config) (*Server, error) {
 	}, nil
 }
 
-func (s *Server) sendOIDCError(w http.ResponseWriter, statusCode int, err string, err_desc string) {
+func (s *Server) sendOIDCError(w http.ResponseWriter, statusCode int, err string, errDesc string) {
 	data, _ := json.Marshal(Error{
 		Error:            err,
-		ErrorDescription: err_desc,
+		ErrorDescription: errDesc,
 	})
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -350,7 +348,7 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	// NOTE: This is important as the library matches this keyID with the public key
 	token.Header["kid"] = s.keyID
-	idToken, err := token.SignedString(s.rsaKeys.signKey)
+	idToken, err := token.SignedString(s.privateKey)
 	if err != nil {
 		s.logger.Errorf("unable to sign jwt token: %s", err)
 		s.sendOIDCError(w, http.StatusInternalServerError, "server_errror", "server_error")
@@ -404,7 +402,7 @@ func (s *Server) UserInfo(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) Certs(w http.ResponseWriter, r *http.Request) {
 	jwk := jose.JSONWebKey{
-		Key:       s.rsaKeys.verifyKey,
+		Key:       s.publicKey,
 		KeyID:     s.keyID,
 		Use:       "sig",
 		Algorithm: "RS256",
