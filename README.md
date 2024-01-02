@@ -6,6 +6,12 @@
 go build
 ```
 
+## Run
+
+```
+./mock-oid-server server
+```
+
 ## Configuration
 
 Use the following environment variables:
