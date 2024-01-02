@@ -41,7 +41,7 @@ func loadClients() ([]*mockoidc.Client, error) {
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to parse clients: %w", err)
 		}
 	}
 	return clients, nil
@@ -65,7 +65,7 @@ func loadUsers() ([]*mockoidc.User, error) {
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to parse users: %w", err)
 		}
 	}
 	return users, nil

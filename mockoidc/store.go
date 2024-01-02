@@ -72,6 +72,7 @@ func (s *Store) FlushToFile() error {
 	defer bwriter.Flush()
 	for _, v := range s.backend.GetALL(true) {
 		data, err := json.Marshal(v)
+		data = append(data, '\n')
 		if err != nil {
 			return err
 		}
