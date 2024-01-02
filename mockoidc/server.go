@@ -177,7 +177,6 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	templateAuth.Execute(w, templateAuthParams{
-		FormAction:   "/auth",
 		Scope:        scope,
 		RedirectURI:  redirectURI,
 		State:        state,
@@ -250,15 +249,15 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "unexpected error", http.StatusInternalServerError)
 				return
 			}
-			now := time.Now()
 			newLogin := &Login{
 				Aud:         clientID,
-				Sub:         ulid.Make().String(),
+				Sub:         code,
 				RedirectURI: redirectURI,
-				User:        user,
-				AuthTime:    &now,
+				UserID:      user.ID,
+				AuthTime:    time.Now().Unix(),
 				State:       state,
 			}
+
 			if err := s.logins.Set(code, newLogin); err != nil {
 				s.logger.Errorf("unable to store mapping code to user: %s", err)
 				http.Error(w, "unexpected error", http.StatusInternalServerError)
@@ -277,7 +276,6 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	templateAuth.Execute(w, templateAuthParams{
-		FormAction:   "/auth",
 		Error:        authError,
 		Scope:        scope,
 		RedirectURI:  redirectURI,
@@ -289,13 +287,14 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) loginToClaims(login *Login) jwt.MapClaims {
 	claims := jwt.MapClaims{}
-	for _, c := range login.User.Claims {
+	user := s.getUser(login.UserID)
+	for _, c := range user.Claims {
 		claims[c.Name] = c.Value
 	}
 	claims["iss"] = s.endpoints.Issuer
 	claims["sub"] = login.Sub
 	claims["aud"] = login.Aud
-	claims["auth_time"] = login.AuthTime.Unix()
+	claims["auth_time"] = login.AuthTime
 	claims["iat"] = time.Now().Unix()
 	claims["exp"] = time.Now().Add(s.expiresIn).Unix()
 	return claims
@@ -392,7 +391,8 @@ func (s *Server) UserInfo(w http.ResponseWriter, r *http.Request) {
 		statusCode = http.StatusOK
 		w.Header().Add("Content-Type", "application/json")
 		login := l.(*Login)
-		data, _ = json.Marshal(login.User.Claims)
+		user := s.getUser(login.UserID)
+		data, _ = json.Marshal(user.Claims)
 	}
 
 	w.WriteHeader(statusCode)
@@ -442,7 +442,7 @@ func (s *Server) getClient(id string) *Client {
 
 func (s *Server) getUser(username string) *User {
 	for _, user := range s.users {
-		if user.Username == username {
+		if user.ID == username {
 			return user
 		}
 	}

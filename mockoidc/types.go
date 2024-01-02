@@ -1,7 +1,5 @@
 package mockoidc
 
-import "time"
-
 type Endpoints struct {
 	Issuer                            string   `json:"issuer"`
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
@@ -26,8 +24,8 @@ type Tokens struct {
 }
 
 type User struct {
-	Username string   `json:"username"`
-	Claims   []*Claim `json:"claims"`
+	ID     string   `json:"id"`
+	Claims []*Claim `json:"claims"`
 }
 
 type Client struct {
@@ -43,10 +41,10 @@ type Claim struct {
 type Login struct {
 	Aud         string
 	Sub         string
-	AuthTime    *time.Time //for claim auth_time
+	AuthTime    int64 //for claim auth_time
 	RedirectURI string
 	State       string
-	User        *User
+	UserID      string
 }
 
 type Error struct {

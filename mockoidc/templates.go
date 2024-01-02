@@ -9,7 +9,7 @@ const templateAuthS = `
 	{{with .Error}}
 		<p><b>{{.}}</b></p>
 	{{end}}
-	<form method="POST" action="{{.FormAction}}">
+	<form method="POST">
 		Username: <input name="username" type="text">
 		<input type="hidden" name="scope" value="{{.Scope}}">
 		<input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
@@ -25,7 +25,6 @@ const templateAuthS = `
 var templateAuth = template.Must(template.New("").Parse(templateAuthS))
 
 type templateAuthParams struct {
-	FormAction   string
 	Username     string
 	Scope        string
 	RedirectURI  string
