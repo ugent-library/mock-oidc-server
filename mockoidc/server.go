@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bluele/gcache"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/sessions"
 	"github.com/oklog/ulid/v2"
@@ -28,6 +27,7 @@ type Config struct {
 	Logger            *zap.SugaredLogger
 	Users             []*User
 	Clients           []*Client
+	Store             *Store
 }
 
 type Server struct {
@@ -38,7 +38,7 @@ type Server struct {
 	publicKey         *rsa.PublicKey
 	privateKey        *rsa.PrivateKey
 	endpoints         *Endpoints
-	logins            gcache.Cache
+	logins            *Store
 	expiresIn         time.Duration
 	uriBase           string
 	users             []*User
@@ -103,7 +103,7 @@ func NewServer(config Config) (*Server, error) {
 		expiresIn:         config.ExpiresIn,
 		users:             config.Users,
 		clients:           config.Clients,
-		logins:            gcache.New(100).LRU().Expiration(config.ExpiresIn).Build(),
+		logins:            config.Store,
 	}, nil
 }
 
@@ -326,7 +326,7 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 	}
 
 	l, err := s.logins.Get(code)
-	if errors.Is(err, gcache.KeyNotFoundError) {
+	if errors.Is(err, ErrNotFound) {
 		s.sendOIDCError(w, http.StatusBadRequest, "invalid_grant", "invalid_grant")
 		return
 	} else if err != nil {
@@ -377,7 +377,7 @@ func (s *Server) UserInfo(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		data = []byte("unauthorized")
 	} else if l, err := s.logins.Get(accessToken); err != nil {
-		if errors.Is(err, gcache.KeyNotFoundError) {
+		if errors.Is(err, ErrNotFound) {
 			statusCode = http.StatusUnauthorized
 			w.Header().Set("Content-Type", "text/plain")
 			w.Header().Set("WWW-Authenticate", "Bearer error=\"unsufficient_scope\"")

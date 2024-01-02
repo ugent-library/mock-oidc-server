@@ -118,7 +118,7 @@ var serverCmd = &cobra.Command{
 		}
 
 		// TODO: as long as logins are stored in memory, cookies SHOULD be cleared on each restart
-		// so only preload session secret when logins are stored remotely
+		// so only preload session secret when logins are stored remotely and store expiration time
 		srvConfig := mockoidc.Config{
 			SessionCookieName: config.SessionCookieName,
 			SessionSecret:     ulid.Make().String(),
@@ -129,6 +129,7 @@ var serverCmd = &cobra.Command{
 			Logger:            logger,
 			Users:             users,
 			Clients:           clients,
+			Store:             store,
 		}
 
 		oidcServer, err := mockoidc.NewServer(srvConfig)

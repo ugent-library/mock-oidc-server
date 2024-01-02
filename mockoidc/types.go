@@ -1,5 +1,7 @@
 package mockoidc
 
+import "errors"
+
 type Endpoints struct {
 	Issuer                            string   `json:"issuer"`
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
@@ -39,15 +41,17 @@ type Claim struct {
 }
 
 type Login struct {
-	Aud         string
-	Sub         string
-	AuthTime    int64 //for claim auth_time
-	RedirectURI string
-	State       string
-	UserID      string
+	Aud         string `json:"aud,omitempty"`
+	Sub         string `json:"sub,omitempty"`
+	AuthTime    int64  `json:"auth_time,omitempty"` //for claim auth_time
+	RedirectURI string `json:"redirect_uri,omitempty"`
+	State       string `json:"state,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
 }
 
 type Error struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description"`
 }
+
+var ErrNotFound = errors.New("not found")
