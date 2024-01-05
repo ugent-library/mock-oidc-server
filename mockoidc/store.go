@@ -1,84 +1,86 @@
 package mockoidc
 
 import (
-	"bufio"
-	"encoding/json"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/bluele/gcache"
 )
 
-type Store struct {
-	backend gcache.Cache
-	file    string
+type TokenStore struct {
+	backend   gcache.Cache
+	expiresIn time.Duration
 }
 
-func NewStore(file string, size int, duration time.Duration) (*Store, error) {
-	backend := gcache.New(size).LRU().Expiration(duration).Build()
-
-	// TODO: flushed logins do not store expiration date
-	if _, err := os.Stat(file); err == nil {
-		reader, err := os.Open(file)
-		if err != nil {
-			return nil, err
-		}
-		defer reader.Close()
-
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			l := Login{}
-			if err := json.Unmarshal(scanner.Bytes(), &l); err != nil {
-				return nil, err
-			}
-			backend.Set(l.Sub, &l)
-		}
-
-		if err := scanner.Err(); err != nil {
-			return nil, err
-		}
-	}
-
-	return &Store{
-		backend: backend,
-		file:    file,
+func NewTokenStore(size int, expiresIn time.Duration) (*TokenStore, error) {
+	backend := gcache.New(size).LRU().Expiration(expiresIn).Build()
+	return &TokenStore{
+		backend:   backend,
+		expiresIn: expiresIn,
 	}, nil
 }
 
-func (s *Store) Get(key any) (any, error) {
-	val, err := s.backend.Get(key)
+func (s *TokenStore) GetToken(code string) (*Token, error) {
+	val, err := s.backend.Get(code)
 	if errors.Is(err, gcache.KeyNotFoundError) {
 		return nil, ErrNotFound
 	}
-	return val, nil
+	return val.(*Token), nil
 }
 
-func (s *Store) Set(key any, val any) error {
-	return s.backend.Set(key, val)
+func (s *TokenStore) AddToken(t *Token) error {
+	return s.backend.Set(t.Sub, t)
 }
 
-func (s *Store) Purge() {
+func (s *TokenStore) Purge() {
 	s.backend.Purge()
 }
 
-func (s *Store) FlushToFile() error {
-	writer, err := os.Create(s.file)
-	if err != nil {
-		return err
+func (s *TokenStore) NewToken(sessionID string, clientID string, redirectURI string, state string) *Token {
+	hash := sha256.New()
+	hash.Write([]byte(sessionID))
+	hash.Write([]byte{':'})
+	hash.Write([]byte(clientID))
+	hash.Write([]byte{':'})
+	hash.Write([]byte(redirectURI))
+	sub := hex.EncodeToString(hash.Sum(nil))
+	return &Token{
+		SessionID:   sessionID,
+		Aud:         clientID,
+		AuthTime:    time.Now().Unix(),
+		RedirectURI: redirectURI,
+		State:       state,
+		Sub:         sub,
+		Exp:         time.Now().Add(s.expiresIn).Unix(),
 	}
-	defer writer.Close()
-	bwriter := bufio.NewWriter(writer)
-	defer bwriter.Flush()
+}
+
+func (s *TokenStore) getAll() []*Token {
+	tokens := []*Token{}
 	for _, v := range s.backend.GetALL(true) {
-		data, err := json.Marshal(v)
-		data = append(data, '\n')
-		if err != nil {
-			return err
-		}
-		if _, err := bwriter.Write(data); err != nil {
-			return err
+		tokens = append(tokens, v.(*Token))
+	}
+	return tokens
+}
+
+func (s *TokenStore) GetTokenByTokenRequest(code string, clientID string, redirectURI string) (*Token, error) {
+	token, err := s.GetToken(code)
+	if err != nil {
+		return nil, err
+	}
+	if token.Aud == clientID && token.RedirectURI == redirectURI {
+		return token, nil
+	}
+	return nil, ErrNotFound
+}
+
+func (s *TokenStore) GetTokenBySessionRequest(sessionID string, clientID string, redirectURI string, state string) (*Token, error) {
+	for _, token := range s.getAll() {
+		if token.SessionID == sessionID && token.Aud == clientID && token.RedirectURI == redirectURI && token.State == state {
+			return token, nil
 		}
 	}
-	return nil
+	return nil, ErrNotFound
 }

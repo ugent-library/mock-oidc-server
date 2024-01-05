@@ -15,5 +15,4 @@ type Config struct {
 	Clients           string `env:"CLIENTS"`
 	UsersPath         string `env:"USERS_PATH" envDefault:".data/users.json"`
 	Users             string `env:"USERS"`
-	DataPath          string `env:"DATA_PATH,required" envDefault:".data/logins.json"`
 }

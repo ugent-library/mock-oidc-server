@@ -27,7 +27,7 @@ type Config struct {
 	Logger            *zap.SugaredLogger
 	Users             []*User
 	Clients           []*Client
-	Store             *Store
+	Store             *TokenStore
 }
 
 type Server struct {
@@ -38,7 +38,7 @@ type Server struct {
 	publicKey         *rsa.PublicKey
 	privateKey        *rsa.PrivateKey
 	endpoints         *Endpoints
-	logins            *Store
+	tokens            *TokenStore
 	expiresIn         time.Duration
 	uriBase           string
 	users             []*User
@@ -103,7 +103,7 @@ func NewServer(config Config) (*Server, error) {
 		expiresIn:         config.ExpiresIn,
 		users:             config.Users,
 		clients:           config.Clients,
-		logins:            config.Store,
+		tokens:            config.Store,
 	}, nil
 }
 
@@ -133,12 +133,17 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if oldCode, ok := session.Values["code"]; ok {
+	sessionID := "" // session.ID for CookieStore is always empty
+	if s, ok := session.Values["id"]; ok {
+		sessionID = s.(string)
+	}
+
+	if token, err := s.tokens.GetTokenBySessionRequest(sessionID, clientID, redirectURI, state); err == nil {
 		q := redirectTo.Query()
 		if state != "" {
 			q.Set("state", state)
 		}
-		q.Set("code", oldCode.(string))
+		q.Set("code", token.Sub)
 		q.Set("iss", s.endpoints.Issuer)
 		redirectTo.RawQuery = q.Encode()
 		http.Redirect(w, r, redirectTo.String(), http.StatusFound)
@@ -242,23 +247,17 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 		if user == nil {
 			authError = "Unable to find user " + username
 		} else {
-			code := ulid.Make().String()
-			session.Values["code"] = code
+			sessionID := newSessionID()
+			session.Values["id"] = sessionID
 			if err := s.sessionStore.Save(r, w, session); err != nil {
 				s.logger.Errorf("unable to save session: %s", err)
 				http.Error(w, "unexpected error", http.StatusInternalServerError)
 				return
 			}
-			newLogin := &Login{
-				Aud:         clientID,
-				Sub:         code,
-				RedirectURI: redirectURI,
-				UserID:      user.ID,
-				AuthTime:    time.Now().Unix(),
-				State:       state,
-			}
+			token := s.tokens.NewToken(sessionID, clientID, redirectURI, state)
+			token.UserID = user.ID
 
-			if err := s.logins.Set(code, newLogin); err != nil {
+			if err := s.tokens.AddToken(token); err != nil {
 				s.logger.Errorf("unable to store mapping code to user: %s", err)
 				http.Error(w, "unexpected error", http.StatusInternalServerError)
 				return
@@ -268,7 +267,8 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 				q.Set("state", state)
 			}
 			q.Set("iss", s.endpoints.Issuer)
-			q.Set("code", code)
+			// important: "code" equals subsequent token sub. Just for simplicity
+			q.Set("code", token.Sub)
 			redirectTo.RawQuery = q.Encode()
 			http.Redirect(w, r, redirectTo.String(), http.StatusFound)
 			return
@@ -285,18 +285,18 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) loginToClaims(login *Login) jwt.MapClaims {
+func (s *Server) tokenToClaims(token *Token) jwt.MapClaims {
 	claims := jwt.MapClaims{}
-	user := s.getUser(login.UserID)
+	user := s.getUser(token.UserID)
 	for _, c := range user.Claims {
 		claims[c.Name] = c.Value
 	}
 	claims["iss"] = s.endpoints.Issuer
-	claims["sub"] = login.Sub
-	claims["aud"] = login.Aud
-	claims["auth_time"] = login.AuthTime
+	claims["sub"] = token.Sub
+	claims["aud"] = token.Aud
+	claims["auth_time"] = token.AuthTime
 	claims["iat"] = time.Now().Unix()
-	claims["exp"] = time.Now().Add(s.expiresIn).Unix()
+	claims["exp"] = token.Exp
 	return claims
 }
 
@@ -325,7 +325,7 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	l, err := s.logins.Get(code)
+	token, err := s.tokens.GetTokenByTokenRequest(code, clientID, redirectURI)
 	if errors.Is(err, ErrNotFound) {
 		s.sendOIDCError(w, http.StatusBadRequest, "invalid_grant", "invalid_grant")
 		return
@@ -334,19 +334,12 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	login := l.(*Login)
-	if login.RedirectURI != redirectURI {
-		s.sendOIDCError(w, http.StatusBadRequest, "invalid_grant", "invalid_grant")
-		return
-	}
+	claims := s.tokenToClaims(token)
 
-	//ALL OK
-	claims := s.loginToClaims(login)
-
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	signedToken := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	// NOTE: This is important as the library matches this keyID with the public key
-	token.Header["kid"] = s.keyID
-	idToken, err := token.SignedString(s.privateKey)
+	signedToken.Header["kid"] = s.keyID
+	idToken, err := signedToken.SignedString(s.privateKey)
 	if err != nil {
 		s.logger.Errorf("unable to sign jwt token: %s", err)
 		s.sendOIDCError(w, http.StatusInternalServerError, "server_errror", "server_error")
@@ -376,7 +369,7 @@ func (s *Server) UserInfo(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		data = []byte("unauthorized")
-	} else if l, err := s.logins.Get(accessToken); err != nil {
+	} else if token, err := s.tokens.GetToken(accessToken); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			statusCode = http.StatusUnauthorized
 			w.Header().Set("Content-Type", "text/plain")
@@ -390,8 +383,7 @@ func (s *Server) UserInfo(w http.ResponseWriter, r *http.Request) {
 	} else {
 		statusCode = http.StatusOK
 		w.Header().Add("Content-Type", "application/json")
-		login := l.(*Login)
-		user := s.getUser(login.UserID)
+		user := s.getUser(token.UserID)
 		data, _ = json.Marshal(user.Claims)
 	}
 
@@ -425,7 +417,7 @@ func (s *Server) Discovery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Clear(w http.ResponseWriter, r *http.Request) {
-	s.logins.Purge()
+	s.tokens.Purge()
 	w.Header().Add("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))

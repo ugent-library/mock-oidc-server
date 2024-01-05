@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/caarlos0/env/v8"
@@ -15,7 +13,7 @@ import (
 
 var logger *zap.SugaredLogger
 var config Config
-var store *mockoidc.Store
+var store *mockoidc.TokenStore
 var rootCmd = &cobra.Command{
 	Use: "mock-oidc-server",
 }
@@ -41,7 +39,7 @@ func initConfig() {
 func initStore() {
 	expiresIn, err := time.ParseDuration(config.ExpiresIn)
 	cobra.CheckErr(err)
-	s, err := mockoidc.NewStore(config.DataPath, 100, expiresIn)
+	s, err := mockoidc.NewTokenStore(100, expiresIn)
 	cobra.CheckErr(err)
 	store = s
 }
@@ -50,11 +48,6 @@ func init() {
 	cobra.OnInitialize(initConfig, initLogger, initStore)
 	cobra.OnFinalize(func() {
 		logger.Sync()
-		if store != nil {
-			if err := store.FlushToFile(); err != nil {
-				fmt.Fprintf(os.Stderr, "unable to flush store: %s", err)
-			}
-		}
 	})
 }
 

@@ -1,6 +1,10 @@
 package mockoidc
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/oklog/ulid/v2"
+)
 
 type Endpoints struct {
 	Issuer                            string   `json:"issuer"`
@@ -40,13 +44,15 @@ type Claim struct {
 	Value string `json:"value"`
 }
 
-type Login struct {
+type Token struct {
+	SessionID   string `json:"session_id"`
 	Aud         string `json:"aud,omitempty"`
 	Sub         string `json:"sub,omitempty"`
 	AuthTime    int64  `json:"auth_time,omitempty"` //for claim auth_time
 	RedirectURI string `json:"redirect_uri,omitempty"`
 	State       string `json:"state,omitempty"`
 	UserID      string `json:"user_id,omitempty"`
+	Exp         int64  `json:"exp,omitempty"`
 }
 
 type Error struct {
@@ -55,3 +61,7 @@ type Error struct {
 }
 
 var ErrNotFound = errors.New("not found")
+
+func newSessionID() string {
+	return ulid.Make().String()
+}
