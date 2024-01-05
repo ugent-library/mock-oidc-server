@@ -1,8 +1,6 @@
 package mockoidc
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"sort"
 	"time"
@@ -51,22 +49,16 @@ func (s *TokenStore) ExposeToken(t *Token) (*Token, error) {
 }
 
 func (s *TokenStore) NewToken(sessionID string, clientID string, redirectURI string) *Token {
-	hash := sha256.New()
-	hash.Write([]byte(sessionID))
-	hash.Write([]byte{':'})
-	hash.Write([]byte(clientID))
-	hash.Write([]byte{':'})
-	hash.Write([]byte(redirectURI))
-	sub := hex.EncodeToString(hash.Sum(nil))
 	return &Token{
 		SessionID:   sessionID,
 		Aud:         clientID,
 		AuthTime:    time.Now().Unix(),
 		RedirectURI: redirectURI,
-		Sub:         sub,
+		Sub:         ulid.Make().String(),
 		Exp:         time.Now().Add(s.expiresIn).Unix(),
 		Code:        ulid.Make().String(),
 		AccessToken: "",
+		Iat:         0,
 	}
 }
 
