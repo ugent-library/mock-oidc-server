@@ -354,11 +354,12 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 		s.sendOIDCError(w, http.StatusInternalServerError, "server_errror", "server_error")
 		return
 	}
+
 	t := &Tokens{
 		TokenType:   "Bearer",
 		IDToken:     idToken,
 		AccessToken: token.AccessToken,
-		ExpiresIn:   int(time.Since(time.Unix(token.Exp, 0)).Seconds()),
+		ExpiresIn:   int(time.Until(time.Unix(token.Exp, 0)).Seconds()),
 	}
 	data, _ := json.Marshal(t)
 	w.Header().Add("Content-Type", "application/json")
