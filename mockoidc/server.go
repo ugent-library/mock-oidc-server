@@ -1,6 +1,7 @@
 package mockoidc
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
@@ -186,13 +187,22 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templateAuth.Execute(w, templateAuthParams{
+	buf := &bytes.Buffer{}
+	err = templateAuth.Execute(buf, templateAuthParams{
 		Scope:        scope,
 		RedirectURI:  redirectURI,
 		State:        state,
 		ClientID:     clientID,
 		ResponseType: responseType,
+		Users:        s.users,
 	})
+	if err != nil {
+		s.logger.Errorf("template error: %s", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
 }
 
 func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
@@ -279,14 +289,23 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	templateAuth.Execute(w, templateAuthParams{
+	buf := &bytes.Buffer{}
+	templateAuth.Execute(buf, templateAuthParams{
 		Error:        authError,
 		Scope:        scope,
 		RedirectURI:  redirectURI,
 		State:        state,
 		ClientID:     clientID,
 		ResponseType: responseType,
+		Users:        s.users,
 	})
+	if err != nil {
+		s.logger.Errorf("template error: %s", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
 }
 
 func (s *Server) tokenToClaims(token *Token) jwt.MapClaims {
