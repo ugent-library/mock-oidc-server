@@ -126,6 +126,7 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 	redirectURI := params.Get("redirect_uri")
 	scope := params.Get("scope")
 	clientID := params.Get("client_id")
+	prompt := params.Get("prompt")
 
 	redirectTo, err := url.ParseRequestURI(redirectURI)
 	if err != nil {
@@ -137,13 +138,17 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 	if s, ok := session.Values["id"]; ok {
 		sessionID = s.(string)
 	}
-
-	if token, err := s.tokens.GetTokenBySessionRequest(sessionID, clientID, redirectURI, state); err == nil {
+	token, _ := s.tokens.GetTokenBySession(sessionID, clientID, redirectURI)
+	if token != nil && slices.Contains([]string{"login", "select_account"}, prompt) {
+		s.tokens.RemoveToken(token)
+		token = nil
+	}
+	if token != nil {
 		q := redirectTo.Query()
 		if state != "" {
 			q.Set("state", state)
 		}
-		q.Set("code", token.Sub)
+		q.Set("code", token.Code)
 		q.Set("iss", s.endpoints.Issuer)
 		redirectTo.RawQuery = q.Encode()
 		http.Redirect(w, r, redirectTo.String(), http.StatusFound)
@@ -254,7 +259,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "unexpected error", http.StatusInternalServerError)
 				return
 			}
-			token := s.tokens.NewToken(sessionID, clientID, redirectURI, state)
+			token := s.tokens.NewToken(sessionID, clientID, redirectURI)
 			token.UserID = user.ID
 
 			if err := s.tokens.AddToken(token); err != nil {
@@ -267,8 +272,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 				q.Set("state", state)
 			}
 			q.Set("iss", s.endpoints.Issuer)
-			// important: "code" equals subsequent token sub. Just for simplicity
-			q.Set("code", token.Sub)
+			q.Set("code", token.Code)
 			redirectTo.RawQuery = q.Encode()
 			http.Redirect(w, r, redirectTo.String(), http.StatusFound)
 			return
@@ -295,7 +299,7 @@ func (s *Server) tokenToClaims(token *Token) jwt.MapClaims {
 	claims["sub"] = token.Sub
 	claims["aud"] = token.Aud
 	claims["auth_time"] = token.AuthTime
-	claims["iat"] = time.Now().Unix()
+	claims["iat"] = token.Iat
 	claims["exp"] = token.Exp
 	return claims
 }
@@ -325,11 +329,16 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := s.tokens.GetTokenByTokenRequest(code, clientID, redirectURI)
+	token, err := s.tokens.GetTokenByCode(code, clientID, redirectURI)
 	if errors.Is(err, ErrNotFound) {
 		s.sendOIDCError(w, http.StatusBadRequest, "invalid_grant", "invalid_grant")
 		return
 	} else if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if token, err = s.tokens.ExposeToken(token); err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -348,8 +357,8 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 	t := &Tokens{
 		TokenType:   "Bearer",
 		IDToken:     idToken,
-		AccessToken: code,
-		ExpiresIn:   int(s.expiresIn.Seconds()),
+		AccessToken: token.AccessToken,
+		ExpiresIn:   int(time.Since(time.Unix(token.Exp, 0)).Seconds()),
 	}
 	data, _ := json.Marshal(t)
 	w.Header().Add("Content-Type", "application/json")
@@ -369,7 +378,7 @@ func (s *Server) UserInfo(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		data = []byte("unauthorized")
-	} else if token, err := s.tokens.GetToken(accessToken); err != nil {
+	} else if token, err := s.tokens.GetTokenByAccessToken(accessToken); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			statusCode = http.StatusUnauthorized
 			w.Header().Set("Content-Type", "text/plain")

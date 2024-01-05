@@ -50,9 +50,11 @@ type Token struct {
 	Sub         string `json:"sub,omitempty"`
 	AuthTime    int64  `json:"auth_time,omitempty"` //for claim auth_time
 	RedirectURI string `json:"redirect_uri,omitempty"`
-	State       string `json:"state,omitempty"`
 	UserID      string `json:"user_id,omitempty"`
 	Exp         int64  `json:"exp,omitempty"`
+	Code        string `json:"code"`
+	AccessToken string `json:"access_token,omitempty"`
+	Iat         int64  `json:"iat"`
 }
 
 type Error struct {
@@ -64,4 +66,18 @@ var ErrNotFound = errors.New("not found")
 
 func newSessionID() string {
 	return ulid.Make().String()
+}
+
+type ByExpToken []*Token
+
+func (tokens ByExpToken) Len() int {
+	return len(tokens)
+}
+
+func (tokens ByExpToken) Swap(i, j int) {
+	tokens[i], tokens[j] = tokens[j], tokens[i]
+}
+
+func (tokens ByExpToken) Less(i, j int) bool {
+	return tokens[i].Exp < tokens[j].Exp
 }
