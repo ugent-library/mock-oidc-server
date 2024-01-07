@@ -72,19 +72,21 @@ func loadUsers() ([]*mockoidc.User, error) {
 }
 
 func loadPublicKey() (*rsa.PublicKey, error) {
+	if config.PublicKey != "" {
+		return parseRSAPublicKey([]byte(config.PublicKey))
+	}
 	if config.PublicKeyPath != "" {
 		return loadRSAPublicKeyFromFile(config.PublicKeyPath)
-	} else if config.PublicKey != "" {
-		return parseRSAPublicKey([]byte(config.PublicKey))
 	}
 	return nil, errors.New("neither PUBLIC_KEY_PATH nor PUBLIC_KEY given")
 }
 
 func loadPrivateKey() (*rsa.PrivateKey, error) {
+	if config.PrivateKey != "" {
+		return parseRSAPrivateKey([]byte(config.PrivateKey))
+	}
 	if config.PrivateKeyPath != "" {
 		return loadRSAPrivateKeyFromFile(config.PrivateKeyPath)
-	} else if config.PrivateKey != "" {
-		return parseRSAPrivateKey([]byte(config.PrivateKey))
 	}
 	return nil, errors.New("neither PRIVATE_KEY_PATH nor PRIVATE_KEY given")
 }
