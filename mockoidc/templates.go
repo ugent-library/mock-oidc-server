@@ -17,6 +17,7 @@ const templateAuthS = `
 		<input type="hidden" name="state" value="{{.State}}">
 		<input type="hidden" name="client_id" value="{{.ClientID}}">
 		<input type="hidden" name="response_type" value="{{.ResponseType}}">
+		<input type="hidden" name="nonce" value="{{.Nonce}}">
 		<button type="submit">Submit</button>
 	</form>
 	<h1>Available users:</h1>
@@ -48,4 +49,5 @@ type templateAuthParams struct {
 	ResponseType string
 	Error        string
 	Users        []*User
+	Nonce        string
 }

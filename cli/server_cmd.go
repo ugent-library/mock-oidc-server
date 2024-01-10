@@ -151,6 +151,7 @@ var serverCmd = &cobra.Command{
 		mux.Post("/auth", oidcServer.AuthPost)
 		mux.Post("/token", oidcServer.Token)
 		mux.Get("/certs", oidcServer.Certs)
+		mux.Get("/userinfo", oidcServer.UserInfo)
 		mux.Get("/clear", oidcServer.Clear)
 
 		addr := fmt.Sprintf("%s:%s", config.Host, config.Port)

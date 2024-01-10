@@ -20,6 +20,7 @@ type Endpoints struct {
 	ClaimsSupported                   []string `json:"claims_supported"`
 	ClaimTypesSupported               []string `json:"claim_types_supported"`
 	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
+	SubjectTypesSupported             []string `json:"subject_types_supported,omitempty"`
 }
 
 type Tokens struct {
@@ -55,6 +56,7 @@ type Token struct {
 	Code        string `json:"code"`
 	AccessToken string `json:"access_token,omitempty"`
 	Iat         int64  `json:"iat"`
+	Nonce       string `json:"nonce,omitempty"`
 }
 
 type Error struct {
@@ -80,4 +82,12 @@ func (tokens ByExpToken) Swap(i, j int) {
 
 func (tokens ByExpToken) Less(i, j int) bool {
 	return tokens[i].Exp < tokens[j].Exp
+}
+
+func (u *User) Info() map[string]string {
+	info := map[string]string{}
+	for _, c := range u.Claims {
+		info[c.Name] = c.Value
+	}
+	return info
 }

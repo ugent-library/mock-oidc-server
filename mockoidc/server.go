@@ -58,6 +58,7 @@ func NewServer(config Config) (*Server, error) {
 	sessionStore.Options.HttpOnly = true
 	sessionStore.Options.Secure = false
 
+	// IMPORTANT: keep in line with REQUIRED on https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 	endpoints := &Endpoints{
 		Issuer:                config.URIBase,
 		AuthorizationEndpoint: config.URIBase + "/auth",
@@ -66,6 +67,7 @@ func NewServer(config Config) (*Server, error) {
 		UserInfoEndpoint:      config.URIBase + "/userinfo",
 		TokenEndpointAuthMethodsSupported: []string{
 			"client_secret_post",
+			"client_secret_basic",
 		},
 		GrantTypesSupported: []string{
 			"authorization_code",
@@ -90,6 +92,7 @@ func NewServer(config Config) (*Server, error) {
 		},
 		ClaimTypesSupported:              []string{"normal"},
 		IDTokenSigningAlgValuesSupported: []string{"RS256"},
+		SubjectTypesSupported:            []string{"public"},
 	}
 
 	return &Server{
@@ -124,6 +127,7 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	responseType := params.Get("response_type")
 	state := params.Get("state")
+	nonce := params.Get("nonce")
 	redirectURI := params.Get("redirect_uri")
 	scope := params.Get("scope")
 	clientID := params.Get("client_id")
@@ -142,6 +146,10 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 	token, _ := s.tokens.GetTokenBySession(sessionID, clientID, redirectURI)
 	if token != nil && slices.Contains([]string{"login", "select_account"}, prompt) {
 		s.tokens.RemoveToken(token)
+		token = nil
+	}
+	// user has logged out in the relying party, so client passes a new nonce
+	if token != nil && nonce != token.Nonce {
 		token = nil
 	}
 	if token != nil {
@@ -195,6 +203,7 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 		ClientID:     clientID,
 		ResponseType: responseType,
 		Users:        s.users,
+		Nonce:        nonce,
 	})
 	if err != nil {
 		s.logger.Errorf("template error: %s", err)
@@ -217,6 +226,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 	redirectURI := params.Get("redirect_uri")
 	scope := params.Get("scope")
 	clientID := params.Get("client_id")
+	nonce := params.Get("nonce")
 
 	redirectTo, err := url.ParseRequestURI(redirectURI)
 	if err != nil {
@@ -271,6 +281,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 			}
 			token := s.tokens.NewToken(sessionID, clientID, redirectURI)
 			token.UserID = user.ID
+			token.Nonce = nonce
 
 			if err := s.tokens.AddToken(token); err != nil {
 				s.logger.Errorf("unable to store mapping code to user: %s", err)
@@ -298,6 +309,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 		ClientID:     clientID,
 		ResponseType: responseType,
 		Users:        s.users,
+		Nonce:        nonce,
 	})
 	if err != nil {
 		s.logger.Errorf("template error: %s", err)
@@ -320,6 +332,7 @@ func (s *Server) tokenToClaims(token *Token) jwt.MapClaims {
 	claims["auth_time"] = token.AuthTime
 	claims["iat"] = token.Iat
 	claims["exp"] = token.Exp
+	claims["nonce"] = token.Nonce
 	return claims
 }
 
@@ -334,30 +347,54 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 	redirectURI := params.Get("redirect_uri")
 	code := params.Get("code")
 	grantType := params.Get("grant_type")
-	clientID := params.Get("client_id")
-	clientSecret := params.Get("client_secret")
 
-	if redirectURI == "" || code == "" || grantType != "authorization_code" || clientID == "" || clientSecret == "" {
+	if redirectURI == "" || code == "" || grantType != "authorization_code" {
+		s.logger.Errorf("invalid request: missing required arguments (code, redirect_uri or grant_type)")
+		s.sendOIDCError(w, http.StatusBadRequest, "invalid_request", "invalid_request")
+		return
+	}
+
+	var clientID string
+	var clientSecret string
+
+	//client_secret_basic
+	if username, password, ok := r.BasicAuth(); ok {
+		s.logger.Debugf("auth method client_secret_basic used")
+		clientID = username
+		clientSecret = password
+	} else {
+		//client_secret_post
+		s.logger.Debugf("auth method client_secret_post used")
+		clientID = params.Get("client_id")
+		clientSecret = params.Get("client_secret")
+	}
+
+	if clientID == "" || clientSecret == "" {
+		s.logger.Errorf("invalid request: missing required arguments (client_id or client_secret)")
 		s.sendOIDCError(w, http.StatusBadRequest, "invalid_request", "invalid_request")
 		return
 	}
 
 	client := s.getClient(clientID)
 	if client == nil || client.Secret != clientSecret {
+		s.logger.Errorf("invalid client")
 		s.sendOIDCError(w, http.StatusUnauthorized, "invalid_client", "invalid_client")
 		return
 	}
 
 	token, err := s.tokens.GetTokenByCode(code, clientID, redirectURI)
 	if errors.Is(err, ErrNotFound) {
+		s.logger.Errorf("invalid grant: client not found")
 		s.sendOIDCError(w, http.StatusBadRequest, "invalid_grant", "invalid_grant")
 		return
 	} else if err != nil {
+		s.logger.Errorf("internal server error: %s", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if token, err = s.tokens.ExposeToken(token); err != nil {
+		s.logger.Errorf("internal server error: %s", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -413,9 +450,8 @@ func (s *Server) UserInfo(w http.ResponseWriter, r *http.Request) {
 		statusCode = http.StatusOK
 		w.Header().Add("Content-Type", "application/json")
 		user := s.getUser(token.UserID)
-		data, _ = json.Marshal(user.Claims)
+		data, _ = json.Marshal(user.Info())
 	}
-
 	w.WriteHeader(statusCode)
 	w.Write(data)
 }
