@@ -1,0 +1,27 @@
+[
+  {
+    "id": "JohnDoe",
+		"claims": [
+			{
+				"name":  "name",
+				"value": "John Doe"
+			},
+			{
+				"name":  "given_name",
+				"value": "John"
+			},
+			{
+				"name":  "family_name",
+				"value": "Doe"
+			},
+			{
+				"name":  "preferred_username",
+				"value": "jdoe"
+			},
+			{
+				"name":  "email",
+				"value": "john.doe@example.com"
+			}
+    ]
+  }
+]
