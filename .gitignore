@@ -1,5 +1,6 @@
 /mock-oidc-server
 /data
+!/data/.keep
 !/data/users.json.example
 !/data/clients.json.example
 !/data/oidc.rsa.pub.example
