@@ -44,39 +44,21 @@ Use the following environment variables:
     * base url for application
     * default: `http://localhost:3000`
 
-* `MOCK_OIDC_PUBLIC_KEY`
-
-    * public key
-
 * `MOCK_OIDC_PUBLIC_KEY_PATH`
 
-    * path to public key. Ignored when `MOCK_OIDC_PUBLIC_KEY` is given.
-    * default: `.data/oidc.rsa.pub`
-
-* `MOCK_OIDC_PRIVATE_KEY`
-
-    * private key
+    * path to public key
 
 * `MOCK_OIDC_PRIVATE_KEY_PATH`
 
-    * path to private key. Ignored when `MOCK_OIDC_PRIVATE_KEY` is given.
-    * default: `.data/oidc.rsa`
-
-* `MOCK_OIDC_USERS`:
-
-    * inline json array of (allowed) user objects.
+    * path to private key
 
 * `MOCK_OIDC_USERS_PATH`:
 
-    * file containing json array of (allowed) user objects. Ignored when `MOCK_OIDC_USERS` is given
-
-* `MOCK_OIDC_CLIENTS`:
-
-    * inline json array of (allowed) clients
+    * file containing json array of (allowed) user objects
 
 * `MOCK_OIDC_CLIENTS_PATH`:
 
-    * file containing json array of (allowed) client objects. Ignored when `MOCK_OIDC_CLIENTS` is given
+    * file containing json array of (allowed) client objects
 
 You may also these in a `.env` file which makes
 it easier to use during development.
@@ -93,51 +75,72 @@ For convenience we made the following script available, which requires openssl:
 make keys
 ```
 
-This store the keys in `.data/oidc.rsa.pub` and `.data/oidc.rsa`
+This stores the keys in `data/oidc.rsa.pub` and `data/oidc.rsa`
 
-Copy and paste their contents in environment variables `MOCK_OIDC_PUBLIC_KEY` and `MOCK_OIDC_PRIVATE_KEY`
+Set environment variables `MOCK_OIDC_PUBLIC_KEY_PATH` and `MOCK_OIDC_PRIVATE_KEY_PATH`
 
-if you prefer
+to the new public key and private key path respectively.
+
+
+If you do not have `openssl` available, you MAY use the example
+
+keys in `data/oidc.rsa.example` and `data/oidc.rsa.pub.example`
+
+Command `make test_keys` copies these keys to `data/oidc.rsa.pub` and `data/oidc.rsa`,
+
+if you prefer this.
 
 ### Add clients
 
-Add a JSON object to the json array inside `MOCK_OIDC_CLIENTS`, with the following structure:
+Create a JSON file with the following structure:
 
 ```
-{"id": "my-client", "secret": "my-client-secret"}
+[
+    {"id": "my-client", "secret": "my-client-secret"}
+]
 ```
+
+File must contain an array of objects
+
+Set environment variable `MOCK_OIDC_CLIENTS_PATH` to this path
 
 ### Add users
 
-Add a JSON object to the json array inside `MOCK_OIDC_USERS`, with the following structure:
+Create a JSON file with the following structure:
 
 ```
-{
-    "id": "login-name",
-    "claims": [
-        {
-          "name":  "name",
-          "value": "my full name"
-        },
-        {
-          "name":  "given_name",
-          "value": "first-name"
-        },
-        {
-          "name":  "family_name",
-          "value": "family-name"
-        },
-        {
-          "name":  "preferred_username",
-          "value": "preferred-username"
-        },
-        {
-          "name":  "email",
-          "value": "joe@user.be"
-        }
-    ]
-}
+[
+    {
+        "id": "login-name",
+        "claims": [
+            {
+              "name":  "name",
+              "value": "my full name"
+            },
+            {
+              "name":  "given_name",
+              "value": "first-name"
+            },
+            {
+              "name":  "family_name",
+              "value": "family-name"
+            },
+            {
+              "name":  "preferred_username",
+              "value": "preferred-username"
+            },
+            {
+              "name":  "email",
+              "value": "joe@user.be"
+            }
+        ]
+    }
+]
 ```
+
+File must contain an array of objects
+
+Set environment variable `MOCK_OIDC_USERS_PATH` to this path
 
 # Notes
 

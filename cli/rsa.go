@@ -2,6 +2,7 @@ package cli
 
 import (
 	"crypto/rsa"
+	"fmt"
 	"os"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -10,33 +11,15 @@ import (
 func loadRSAPublicKeyFromFile(file string) (*rsa.PublicKey, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to open public key '%s': %w", file, err)
 	}
-
-	return parseRSAPublicKey(data)
-}
-
-func parseRSAPublicKey(data []byte) (*rsa.PublicKey, error) {
-	key, err := jwt.ParseRSAPublicKeyFromPEM(data)
-	if err != nil {
-		return nil, err
-	}
-
-	return key, nil
+	return jwt.ParseRSAPublicKeyFromPEM(data)
 }
 
 func loadRSAPrivateKeyFromFile(file string) (*rsa.PrivateKey, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to open private key '%s': %w", file, err)
 	}
-	return parseRSAPrivateKey(data)
-}
-
-func parseRSAPrivateKey(data []byte) (*rsa.PrivateKey, error) {
-	key, err := jwt.ParseRSAPrivateKeyFromPEM(data)
-	if err != nil {
-		return nil, err
-	}
-	return key, nil
+	return jwt.ParseRSAPrivateKeyFromPEM(data)
 }

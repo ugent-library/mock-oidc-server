@@ -1,14 +1,12 @@
 package cli
 
 import (
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -24,16 +22,10 @@ import (
 )
 
 func loadClients() ([]*mockoidc.Client, error) {
-	var reader io.Reader
 	var clients []*mockoidc.Client
-	if config.Clients != "" {
-		reader = strings.NewReader(config.Clients)
-	} else if config.ClientsPath != "" {
-		r, err := os.Open(config.ClientsPath)
-		if err != nil {
-			return nil, err
-		}
-		reader = r
+	reader, err := os.Open(config.ClientsPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open clients file '%s': %w", config.ClientsPath, err)
 	}
 	dec := json.NewDecoder(reader)
 	for {
@@ -48,16 +40,10 @@ func loadClients() ([]*mockoidc.Client, error) {
 }
 
 func loadUsers() ([]*mockoidc.User, error) {
-	var reader io.Reader
 	var users []*mockoidc.User
-	if config.Users != "" {
-		reader = strings.NewReader(config.Users)
-	} else if config.UsersPath != "" {
-		r, err := os.Open(config.UsersPath)
-		if err != nil {
-			return nil, err
-		}
-		reader = r
+	reader, err := os.Open(config.UsersPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open users file '%s': %w", config.UsersPath, err)
 	}
 	dec := json.NewDecoder(reader)
 	for {
@@ -69,26 +55,6 @@ func loadUsers() ([]*mockoidc.User, error) {
 		}
 	}
 	return users, nil
-}
-
-func loadPublicKey() (*rsa.PublicKey, error) {
-	if config.PublicKey != "" {
-		return parseRSAPublicKey([]byte(config.PublicKey))
-	}
-	if config.PublicKeyPath != "" {
-		return loadRSAPublicKeyFromFile(config.PublicKeyPath)
-	}
-	return nil, errors.New("neither PUBLIC_KEY_PATH nor PUBLIC_KEY given")
-}
-
-func loadPrivateKey() (*rsa.PrivateKey, error) {
-	if config.PrivateKey != "" {
-		return parseRSAPrivateKey([]byte(config.PrivateKey))
-	}
-	if config.PrivateKeyPath != "" {
-		return loadRSAPrivateKeyFromFile(config.PrivateKeyPath)
-	}
-	return nil, errors.New("neither PRIVATE_KEY_PATH nor PRIVATE_KEY given")
 }
 
 func init() {
@@ -109,12 +75,12 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
-		publicKey, err := loadPublicKey()
+		publicKey, err := loadRSAPublicKeyFromFile(config.PublicKeyPath)
 		if err != nil {
 			return err
 		}
 
-		privateKey, err := loadPrivateKey()
+		privateKey, err := loadRSAPrivateKeyFromFile(config.PrivateKeyPath)
 		if err != nil {
 			return err
 		}
