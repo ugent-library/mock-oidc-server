@@ -204,6 +204,7 @@ func (s *Server) AuthGet(w http.ResponseWriter, r *http.Request) {
 		ResponseType: responseType,
 		Users:        s.users,
 		Nonce:        nonce,
+		FormAction:   s.uriBase + "/auth",
 	})
 	if err != nil {
 		s.logger.Errorf("template error: %s", err)
@@ -310,6 +311,7 @@ func (s *Server) AuthPost(w http.ResponseWriter, r *http.Request) {
 		ResponseType: responseType,
 		Users:        s.users,
 		Nonce:        nonce,
+		FormAction:   s.uriBase + "/auth",
 	})
 	if err != nil {
 		s.logger.Errorf("template error: %s", err)
