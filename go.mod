@@ -1,6 +1,7 @@
 module github.com/ugent-library/mock-oidc-server
 
 go 1.21.3
+toolchain go1.24.1
 
 require (
 	github.com/bluele/gcache v0.0.2
@@ -28,5 +29,5 @@ require (
 	github.com/stretchr/testify v1.8.4 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 )
