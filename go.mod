@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/bluele/gcache v0.0.2
 	github.com/caarlos0/env/v8 v8.0.0
-	github.com/go-chi/chi/v5 v5.0.11
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/gorilla/sessions v1.2.2
 	github.com/joho/godotenv v1.5.1
